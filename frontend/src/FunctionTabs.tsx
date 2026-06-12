@@ -20,9 +20,9 @@ export function FunctionTabs({ functions, activeId, onSelect }: Props) {
             onClick={() => onSelect(func.id)}
             className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"
             style={{
-              background: isActive ? '#2a2a2a' : '#1a1a1a',
-              color: isActive ? '#f0f0f0' : '#888',
-              border: `1px solid ${isActive ? '#3a3a3a' : '#242424'}`,
+              background: isActive ? '#28282B' : '#1f1f21',
+              color: isActive ? '#f0f0f0' : '#aaa',
+              border: `1px solid ${isActive ? '#36363B' : '#2e2e31'}`,
             }}
           >
             <span

@@ -22,6 +22,7 @@ function App() {
   const [prompt, setPrompt] = useState<PromptState>({ text: '', visible: false, generating: false })
   const [zoom, setZoom] = useState(0.85)
   const [highlightRange, setHighlightRange] = useState<{ lineStart: number; lineEnd: number; color: string } | null>(null)
+  const [canvasHasChanges, setCanvasHasChanges] = useState(false)
 
   const canvasRef = useRef<CanvasHandle>(null)
 
@@ -56,6 +57,7 @@ function App() {
       const data = await res.json()
       setFunctions(data.functions)
       if (data.functions.length > 0) setActiveFuncId(data.functions[0].id)
+      setCanvasHasChanges(false)
       localStorage.setItem('orma_parse_cache', JSON.stringify({ code, filename, functions: data.functions }))
     } catch {
       setError('Could not reach the backend.')
@@ -120,7 +122,7 @@ function App() {
   const canvasLeft = 'calc(33vw + 32px)'
 
   return (
-    <div className="w-screen h-screen overflow-hidden relative" style={{ background: '#111' }}>
+    <div className="w-screen h-screen overflow-hidden relative" style={{ background: '#18181A' }}>
 
       {/* Base layer: React Flow canvas — positioned right of code panel */}
       {functions.length > 0 && (
@@ -131,6 +133,7 @@ function App() {
             functions={functions}
             onZoomChange={setZoom}
             onNodeSelect={setHighlightRange}
+            onDirtyChange={setCanvasHasChanges}
           />
         </div>
       )}
@@ -174,9 +177,10 @@ function App() {
             onZoomOut={() => canvasRef.current?.zoomOut()}
             onFitView={() => canvasRef.current?.fitView()}
             onAddNode={() => activeFuncId && canvasRef.current?.addNode(activeFuncId)}
+            onUndo={() => canvasRef.current?.undo()}
             onGeneratePrompt={handleGeneratePrompt}
             generating={prompt.generating}
-            canGenerate={!!activeFuncId}
+            canGenerate={!!activeFuncId && canvasHasChanges}
             zoom={zoom}
           />
         </div>

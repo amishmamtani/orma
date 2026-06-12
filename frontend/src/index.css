@@ -3,7 +3,7 @@
 *, *::before, *::after { box-sizing: border-box; }
 html, body, #root {
   width: 100%; height: 100%; margin: 0; padding: 0;
-  background-color: #111;
+  background-color: #18181A;
   background-image: radial-gradient(#222 1px, transparent 1px);
   background-size: 20px 20px;
 }
@@ -12,3 +12,12 @@ html, body, #root {
 .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
 
 .react-flow__node.selected { box-shadow: none !important; }
+
+@keyframes ghost-float {
+  0%, 100% { transform: translateY(0px) scaleY(0.92); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  50% { transform: translateY(-14px) scaleY(1); animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+}
+@keyframes shadow-pulse {
+  0%, 100% { transform: scaleX(1); opacity: 0.45; animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+  50% { transform: scaleX(0.55); opacity: 0.2; animation-timing-function: cubic-bezier(0.45, 0, 0.55, 1); }
+}

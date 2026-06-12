@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import ghostSrc from './assets/ghost.svg'
 import SyntaxHighlighter from 'react-syntax-highlighter'
 import { atomOneDark } from 'react-syntax-highlighter/dist/esm/styles/hljs'
 
@@ -50,14 +51,14 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
 
   return (
     <div
-      className="absolute flex flex-col rounded-xl overflow-hidden"
+      className="absolute flex flex-col rounded-lg overflow-hidden"
       style={{
-        top: 16,
-        left: 16,
+        top: 12,
+        left: 12,
         width: '33vw',
-        height: 'calc(100vh - 32px)',
-        background: '#1e1e1e',
-        border: `1px solid ${dragging ? '#4f46e5' : '#2a2a2a'}`,
+        height: 'calc(100vh - 24px)',
+        background: '#28282B',
+        border: `1px solid ${dragging ? '#4f46e5' : '#36363B'}`,
         zIndex: 10,
         transition: 'border-color 0.15s',
       }}
@@ -67,12 +68,12 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
     >
       {/* Header */}
       <div
-        className="flex items-center justify-between px-3 py-2 flex-shrink-0"
-        style={{ borderBottom: '1px solid #2a2a2a' }}
+        className="flex items-center justify-between px-2 py-1.5 flex-shrink-0"
+        style={{ borderBottom: '1px solid #36363B' }}
       >
         <div
           className="flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs"
-          style={{ background: '#2a2a2a', color: '#aaa' }}
+          style={{ background: '#36363B', color: '#aaa' }}
         >
           <span className="w-2 h-2 rounded-full flex-shrink-0" style={{ background: '#3b82f6' }} />
           {filename}
@@ -81,8 +82,8 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
         <button
           onClick={onRun}
           disabled={loading || !code.trim()}
-          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all disabled:opacity-40 hover:bg-white/10"
-          style={{ background: '#2a2a2a', color: '#e5e5e5', border: '1px solid #333' }}
+          className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-medium transition-all disabled:opacity-40 hover:opacity-80"
+          style={{ background: '#4f46e5', color: '#fff', border: 'none' }}
         >
           {loading
             ? <span className="inline-block w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin" />
@@ -164,10 +165,28 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
               className="absolute inset-0 flex flex-col items-center justify-center gap-3 select-none"
               style={{ pointerEvents: 'none' }}
             >
-              <span style={{ fontSize: 40 }}>👻</span>
-              <p className="text-xs text-center leading-relaxed px-8" style={{ color: '#555' }}>
-                Hi! I'm Orma, Press Enter to start typing or<br />drag or drop your python file
-              </p>
+              <div className="flex flex-col items-center gap-3" style={{ transform: 'translateY(-32px)' }}>
+                <div className="flex flex-col items-center" style={{ gap: 6 }}>
+                  <img
+                    src={ghostSrc}
+                    width={36}
+                    height={46}
+                    alt=""
+                    style={{ animation: 'ghost-float 3.8s linear infinite' }}
+                  />
+                  <div style={{
+                    width: 28,
+                    height: 3.4,
+                    borderRadius: '50%',
+                    background: '#000',
+                    filter: 'blur(5px)',
+                    animation: 'shadow-pulse 3.8s linear infinite',
+                  }} />
+                </div>
+                <p className="text-xs text-center leading-relaxed px-8" style={{ color: '#555' }}>
+                  Hi! I'm Orma, Press Enter to start typing or<br />drag or drop your python file
+                </p>
+              </div>
             </div>
           </>
         )}

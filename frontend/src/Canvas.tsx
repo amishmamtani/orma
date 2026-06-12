@@ -25,12 +25,12 @@ const V_SPACING = 110
 const BRANCH_GAP = 60  // horizontal gap between sibling branches
 
 const NODE_STYLE: React.CSSProperties = {
-  background: '#1f2128',
+  background: '#28282B',
   color: '#f0f0f0',
   borderRadius: 8,
   width: NODE_W,
   fontSize: 13,
-  border: '1px solid #2d3148',
+  border: '1px solid #36363B',
   padding: '10px 14px',
   textAlign: 'center',
   wordBreak: 'break-word',
@@ -107,6 +107,43 @@ function EditableNode({ id, data, selected }: NodeProps) {
   )
 }
 
+function FunctionCallNode({ data }: NodeProps) {
+  const color = String(data.color ?? '#a78bfa')
+  const handleStyle = { background: '#3d3d3d', border: 'none', width: 8, height: 8 }
+
+  return (
+    <>
+      <Handle type="target" position={Position.Top} style={handleStyle} />
+      <div style={{
+        background: '#28282B',
+        border: `1px solid ${color}55`,
+        borderRadius: 8,
+        width: NODE_W,
+        fontSize: 12,
+        overflow: 'hidden',
+        textAlign: 'left',
+      }}>
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '6px 12px',
+          borderBottom: `1px solid ${color}33`,
+          background: `${color}12`,
+        }}>
+          <span style={{ color, fontWeight: 600, fontSize: 12 }}>{String(data.called_function ?? '')}()</span>
+        </div>
+        <div style={{ padding: '8px 12px', color: '#ccc', lineHeight: 1.5, borderBottom: '1px solid #36363B' }}>
+          {String(data.call_description ?? data.label ?? '')}
+        </div>
+        <div style={{ padding: '6px 12px', color: '#777', fontSize: 11, lineHeight: 1.4 }}>
+          {String(data.call_output ?? '')}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Bottom} style={handleStyle} />
+    </>
+  )
+}
+
 function FunctionHeaderNode({ data }: NodeProps<{ label: string; color: string }>) {
   return (
     <div
@@ -115,7 +152,7 @@ function FunctionHeaderNode({ data }: NodeProps<{ label: string; color: string }
         alignItems: 'center',
         gap: 8,
         padding: '8px 14px',
-        background: '#252836',
+        background: '#28282B',
         borderRadius: 8,
         border: `1px solid ${data.color}44`,
         color: '#f0f0f0',
@@ -140,12 +177,27 @@ function FunctionHeaderNode({ data }: NodeProps<{ label: string; color: string }
   )
 }
 
-const nodeTypes = { functionHeader: FunctionHeaderNode, editable: EditableNode }
+function accentDark(hex: string, mix = 0.2): string {
+  const r = parseInt(hex.slice(1, 3), 16)
+  const g = parseInt(hex.slice(3, 5), 16)
+  const b = parseInt(hex.slice(5, 7), 16)
+  const dr = Math.round(r * mix + 0x18 * (1 - mix))
+  const dg = Math.round(g * mix + 0x18 * (1 - mix))
+  const db = Math.round(b * mix + 0x1a * (1 - mix))
+  return `#${dr.toString(16).padStart(2, '0')}${dg.toString(16).padStart(2, '0')}${db.toString(16).padStart(2, '0')}`
+}
+
+const nodeTypes = { functionHeader: FunctionHeaderNode, editable: EditableNode, functionCall: FunctionCallNode }
 
 function layoutNodes(parseNodes: ParseNode[], parseEdges: ParseEdge[]): Map<string, { x: number; y: number }> {
   const out = new Map<string, Array<{ target: string; label: string }>>()
   for (const n of parseNodes) out.set(n.id, [])
   for (const e of parseEdges) out.get(e.source)?.push({ target: e.target, label: e.label ?? '' })
+
+  const nodeTypeMap = new Map(parseNodes.map(n => [n.id, n.type]))
+  function nodeVSpace(nodeId: string): number {
+    return nodeTypeMap.get(nodeId) === 'function_call' ? V_SPACING + 75 : V_SPACING
+  }
 
   const positions = new Map<string, { x: number; y: number }>()
   const placed = new Set<string>()
@@ -180,17 +232,18 @@ function layoutNodes(parseNodes: ParseNode[], parseEdges: ParseEdge[]): Map<stri
     return null
   }
 
-  function branchDepth(startId: string, stopId: string | null): number {
-    let count = 0, curr = startId
+  function branchHeight(startId: string, stopId: string | null): number {
+    let h = 0, curr = startId
     const seen = new Set<string>()
     while (curr && curr !== stopId) {
       if (seen.has(curr)) break
-      seen.add(curr); count++
+      seen.add(curr)
+      h += nodeVSpace(curr)
       const outs = out.get(curr) ?? []
       if (!outs.length) break
       curr = outs[0].target
     }
-    return count
+    return Math.max(h, V_SPACING)
   }
 
   // Returns the horizontal space a subtree needs so parent branches don't overlap
@@ -227,36 +280,33 @@ function layoutNodes(parseNodes: ParseNode[], parseEdges: ParseEdge[]): Map<stri
     positions.set(nodeId, { x: cx - NODE_W / 2, y })
 
     const outs = out.get(nodeId) ?? []
-    if (!outs.length) return y + V_SPACING
+    if (!outs.length) return y + nodeVSpace(nodeId)
     if (outs.length === 1) {
       const next = outs[0].target
-      if (placed.has(next) || next === stopBefore) return y + V_SPACING
-      return place(next, cx, y + V_SPACING, stopBefore)
+      if (placed.has(next) || next === stopBefore) return y + nodeVSpace(nodeId)
+      return place(next, cx, y + nodeVSpace(nodeId), stopBefore)
     }
 
     const yesEdge = outs.find(e => e.label === 'Yes') ?? outs[0]
     const noEdge  = outs.find(e => e.label === 'No')  ?? outs[1]
     const mergeId = findMerge(yesEdge.target, noEdge.target)
-    const branchY = y + V_SPACING
+    const branchY = y + nodeVSpace(nodeId)
     const noElse  = mergeId === noEdge.target
 
     if (noElse && mergeId) {
       const yesW  = treeWidth(yesEdge.target, mergeId)
       const yesCx = cx - (NODE_W / 2 + BRANCH_GAP / 2 + yesW / 2)
-      const depth = branchDepth(yesEdge.target, mergeId)
       place(yesEdge.target, yesCx, branchY, mergeId)
-      const mergeY = branchY + Math.max(depth, 1) * V_SPACING
+      const mergeY = branchY + branchHeight(yesEdge.target, mergeId)
       if (!placed.has(mergeId)) return place(mergeId, cx, mergeY, stopBefore)
     } else if (mergeId) {
       const yesW  = treeWidth(yesEdge.target, mergeId)
       const noW   = treeWidth(noEdge.target,  mergeId)
       const yesCx = cx - (noW  + BRANCH_GAP) / 2
       const noCx  = cx + (yesW + BRANCH_GAP) / 2
-      const yDepth = branchDepth(yesEdge.target, mergeId)
-      const nDepth = branchDepth(noEdge.target,  mergeId)
       place(yesEdge.target, yesCx, branchY, mergeId)
       place(noEdge.target,  noCx,  branchY, mergeId)
-      const mergeY = branchY + Math.max(yDepth, nDepth, 1) * V_SPACING
+      const mergeY = branchY + Math.max(branchHeight(yesEdge.target, mergeId), branchHeight(noEdge.target, mergeId))
       if (!placed.has(mergeId)) return place(mergeId, cx, mergeY, stopBefore)
     } else {
       const yesW = treeWidth(yesEdge.target, null)
@@ -266,7 +316,7 @@ function layoutNodes(parseNodes: ParseNode[], parseEdges: ParseEdge[]): Map<stri
       if (!placed.has(yesEdge.target)) place(yesEdge.target, yesCx, branchY, stopBefore)
       if (!placed.has(noEdge.target))  place(noEdge.target,  noCx,  branchY, stopBefore)
     }
-    return y + V_SPACING
+    return y + nodeVSpace(nodeId)
   }
 
   const startNode = parseNodes.find(n => n.type === 'start')
@@ -316,9 +366,10 @@ function buildGraph(functions: FunctionData[]) {
 
     func.nodes.forEach(n => {
       const pos = layout.get(n.id) ?? { x: 0, y: 0 }
+      const isFuncCall = n.type === 'function_call'
       nodes.push({
         id: n.id,
-        type: 'editable',
+        type: isFuncCall ? 'functionCall' : 'editable',
         position: { x: xShift + pos.x, y: pos.y + 20 },
         data: {
           label: n.label,
@@ -327,8 +378,13 @@ function buildGraph(functions: FunctionData[]) {
           line_start: n.line_start,
           line_end: n.line_end,
           color,
+          ...(isFuncCall && {
+            called_function: n.called_function,
+            call_description: n.call_description,
+            call_output: n.call_output,
+          }),
         },
-        style: NODE_STYLE,
+        style: isFuncCall ? undefined : NODE_STYLE,
       })
     })
 
@@ -344,8 +400,10 @@ function buildGraph(functions: FunctionData[]) {
         type: 'smoothstep',
         pathOptions: { borderRadius: 20 },
         label: e.label || undefined,
-        labelStyle: { fontSize: 13, fill: '#fff' },
-        labelBgStyle: { fill: 'transparent' },
+        labelStyle: { fontSize: 11, fill: '#ccc' },
+        labelBgStyle: { fill: accentDark(color), fillOpacity: 1 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
         style: { stroke: color, strokeWidth: 1.5 },
         markerEnd: { type: MarkerType.ArrowClosed, color, width: 20, height: 20 },
       })
@@ -364,6 +422,7 @@ export interface CanvasHandle {
   fitView: () => void
   addNode: (funcId: string) => void
   focusFunction: (funcId: string) => void
+  undo: () => void
 }
 
 interface NodeSelectRange {
@@ -376,17 +435,75 @@ interface Props {
   functions: FunctionData[]
   onZoomChange?: (zoom: number) => void
   onNodeSelect?: (range: NodeSelectRange | null) => void
+  onDirtyChange?: (dirty: boolean) => void
 }
 
-export const Canvas = forwardRef<CanvasHandle, Props>(function Canvas({ functions, onZoomChange, onNodeSelect }, ref) {
+export const Canvas = forwardRef<CanvasHandle, Props>(function Canvas({ functions, onZoomChange, onNodeSelect, onDirtyChange }, ref) {
   const { nodes: initial, edges: initialEdges } = buildGraph(functions)
   const [nodes, setNodes, onNodesChange] = useNodesState(initial)
   const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges)
   const flowRef = useRef<ReactFlowInstance | null>(null)
 
+  const historyRef = useRef<Array<{ nodes: Node[]; edges: Edge[] }>>([{ nodes: initial, edges: initialEdges }])
+  const historyIdxRef = useRef(0)
+  const isUndoingRef = useRef(false)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  useEffect(() => {
+    if (isUndoingRef.current) return
+    if (debounceRef.current) clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => {
+      const snapshot = {
+        nodes: (flowRef.current?.getNodes() ?? nodes).map(n => ({ ...n })),
+        edges: (flowRef.current?.getEdges() ?? edges).map(e => ({ ...e })),
+      }
+      historyRef.current = historyRef.current.slice(0, historyIdxRef.current + 1)
+      historyRef.current.push(snapshot)
+      historyIdxRef.current = historyRef.current.length - 1
+      onDirtyChange?.(historyIdxRef.current > 0)
+    }, 300)
+  }, [nodes, edges])
+
+  function undo() {
+    if (historyIdxRef.current <= 0) return
+    isUndoingRef.current = true
+    historyIdxRef.current -= 1
+    const { nodes: prevNodes, edges: prevEdges } = historyRef.current[historyIdxRef.current]
+    setNodes(prevNodes)
+    setEdges(prevEdges)
+    onDirtyChange?.(historyIdxRef.current > 0)
+    setTimeout(() => { isUndoingRef.current = false }, 400)
+  }
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+        e.preventDefault()
+        undo()
+      }
+    }
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [])
+
   const onConnect = useCallback(
-    (connection: Connection) => setEdges(prev => addEdge(connection, prev)),
-    [setEdges],
+    (connection: Connection) => {
+      const allNodes = flowRef.current?.getNodes() ?? nodes
+      const sourceNode = allNodes.find(n => n.id === connection.source)
+      const color = (sourceNode?.data?.color as string) ?? '#4f46e5'
+      setEdges(prev => addEdge({
+        ...connection,
+        type: 'smoothstep',
+        pathOptions: { borderRadius: 20 },
+        style: { stroke: color, strokeWidth: 1.5 },
+        markerEnd: { type: MarkerType.ArrowClosed, color, width: 20, height: 20 },
+        labelStyle: { fontSize: 11, fill: '#ccc' },
+        labelBgStyle: { fill: accentDark(color), fillOpacity: 1 },
+        labelBgPadding: [6, 3] as [number, number],
+        labelBgBorderRadius: 4,
+      }, prev))
+    },
+    [setEdges, nodes],
   )
 
   useImperativeHandle(ref, () => ({
@@ -404,17 +521,20 @@ export const Canvas = forwardRef<CanvasHandle, Props>(function Canvas({ function
         .map(n => ({ id: n.id }))
       flowRef.current?.fitView({ nodes: funcNodeIds, maxZoom: 0.85, duration: 500, padding: 0.2 })
     },
+    undo,
     addNode: (funcId: string) => {
-      const current = flowRef.current?.getNodes() ?? nodes
-      const funcNodes = current.filter(n => n.id.startsWith(funcId + '_') && !n.id.endsWith('_header'))
-      const maxY = funcNodes.reduce((max, n) => Math.max(max, n.position.y), 0)
-      const centerX = funcNodes.reduce((sum, n) => sum + n.position.x, 0) / (funcNodes.length || 1)
+      if (!flowRef.current) return
+      const flowEl = document.querySelector('.react-flow')
+      const rect = flowEl?.getBoundingClientRect()
+      const screenCx = rect ? rect.width / 2 : 400
+      const screenCy = rect ? rect.height / 2 : 300
+      const pos = flowRef.current.project({ x: screenCx, y: screenCy })
       setNodes(prev => [
         ...prev,
         {
           id: `${funcId}_added_${Date.now()}`,
           type: 'editable',
-          position: { x: centerX, y: maxY + V_SPACING },
+          position: { x: pos.x - NODE_W / 2, y: pos.y - 40 },
           data: { label: 'New step', nodeType: 'action', raw_code: '', line_start: 0, line_end: 0 },
           style: NODE_STYLE,
         },
@@ -444,9 +564,9 @@ export const Canvas = forwardRef<CanvasHandle, Props>(function Canvas({ function
       onMove={(_, viewport) => onZoomChange?.(viewport.zoom)}
       nodeTypes={nodeTypes}
       proOptions={{ hideAttribution: true }}
-      style={{ background: '#111' }}
+      style={{ background: '#18181A' }}
     >
-      <Background variant={BackgroundVariant.Dots} color="#222" gap={20} size={1} />
+      <Background variant={BackgroundVariant.Dots} color="#3d3d3d" gap={20} size={1} />
     </ReactFlow>
   )
 })

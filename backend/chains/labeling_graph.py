@@ -5,27 +5,36 @@ from config import get_model
 
 LABELING_PROMPT = """You are labeling steps in a software application for a non-technical user who has never seen code.
 
-Given the following code steps from the function `{function_name}`, write a short plain-English label (under 10 words) for each step.
+Given the following code steps from the function `{function_name}`, write a plain-English label for each step.
 
-Rules:
+Rules for all steps:
 - Use product language, not developer terms (avoid: function, method, loop, iterate, variable, return, instantiate, import)
 - Active voice: "Filter active orders" not "Active order filtering"
 - Be specific to what THIS step does
-- For condition steps, phrase as a natural yes/no question — but PRESERVE the logical direction of the code exactly. "Yes" means the condition was true and the indented body ran. "No" means it was false and execution continued past the block. If the code uses a negation like `if not user:` or `if user is None:`, the question must reflect that: "Is the user missing?" not "Is the user found?" — because "Yes" maps to the body (user was missing), not the continuation.
+- For condition steps, phrase as a natural yes/no question — PRESERVE the logical direction exactly. If the code uses `if not user:` or `if user is None:`, ask "Is the user missing?" not "Is the user found?" — because "Yes" maps to the body (condition was true).
 - For loop steps, describe what is being processed: "For each order in the list"
-- For end/output steps, distinguish between two cases:
-  1. Early exits (returning None, False, an empty value, or an error mid-function): use "Stops here — [reason]" e.g. "Stops here — user not found" or "Stops here — wrong password"
-  2. Normal completion (the final return at the end of the function): use "Done — outputs [what the return expression literally is]". Be literal — do NOT infer what happened to the value before this line. If the code says `return users_db`, say "Done — outputs the user database", not "Done — outputs the updated user database". Any changes are shown in the action steps above, not here.
+- For end/output steps:
+  1. Early exits (returning None, False, empty, or error mid-function): "Stops here — [reason]"
+  2. Normal completion (final return): "Done — outputs [what the return expression literally is]"
+
+Rules for steps marked [CALLS → function_name]:
+- These steps call another function defined in the same codebase. The called function's source code is shown below the node id.
+- label: under 10 words describing what this step does by calling that function
+- call_description: one plain-English sentence (under 15 words) describing what the called function does — no code terms
+- call_output: one sentence (under 12 words) saying what it returns and what the calling function does with the result
+- For all other steps: leave call_description and call_output as null
 
 Steps to label:
 {steps}
 
-Return a label for every node_id listed."""
+Return a label for every node_id listed. For [CALLS →] steps also return call_description and call_output."""
 
 
 class NodeLabel(BaseModel):
     node_id: str
     label: str
+    call_description: str | None = None
+    call_output: str | None = None
 
 
 class FunctionLabels(BaseModel):
@@ -44,10 +53,17 @@ def label_nodes(state: LabelState) -> LabelState:
         return {**state, "labels": []}
 
     model = get_model().with_structured_output(FunctionLabels)
-    steps = "\n".join(
-        f'{n["id"]}: {n["raw_code"] or "(no code)"}'
-        for n in nodes_to_label
-    )
+
+    parts = []
+    for n in nodes_to_label:
+        if n["type"] == "function_call" and n.get("called_function_code"):
+            parts.append(
+                f'{n["id"]} [CALLS → {n["called_function"]}]:\n{n["called_function_code"]}'
+            )
+        else:
+            parts.append(f'{n["id"]}: {n["raw_code"] or "(no code)"}')
+    steps = "\n\n".join(parts)
+
     prompt = LABELING_PROMPT.format(
         function_name=state["function_name"],
         steps=steps,
@@ -56,7 +72,15 @@ def label_nodes(state: LabelState) -> LabelState:
     response = model.invoke(prompt)
     return {
         **state,
-        "labels": [{"node_id": l.node_id, "label": l.label} for l in response.labels],
+        "labels": [
+            {
+                "node_id": l.node_id,
+                "label": l.label,
+                "call_description": l.call_description,
+                "call_output": l.call_output,
+            }
+            for l in response.labels
+        ],
     }
 
 
@@ -71,10 +95,17 @@ def build_labeling_graph():
 labeling_graph = build_labeling_graph()
 
 
-def label_function(function_name: str, nodes: list[dict]) -> dict[str, str]:
+def label_function(function_name: str, nodes: list[dict]) -> dict[str, dict]:
     result = labeling_graph.invoke({
         "function_name": function_name,
         "nodes": nodes,
         "labels": [],
     })
-    return {item["node_id"]: item["label"] for item in result["labels"]}
+    return {
+        item["node_id"]: {
+            "label": item["label"],
+            "call_description": item.get("call_description"),
+            "call_output": item.get("call_output"),
+        }
+        for item in result["labels"]
+    }

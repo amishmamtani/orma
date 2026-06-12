@@ -26,7 +26,19 @@ class ParseRequest(BaseModel):
     code: str
 
 
-def build_function_graph(func_node, code: str, func_id: str):
+def find_user_func_calls(stmt, user_func_names: set) -> set:
+    called = set()
+    for node in ast.walk(stmt):
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Name):
+            if node.func.id in user_func_names:
+                called.add(node.func.id)
+    return called
+
+
+def build_function_graph(func_node, code: str, func_id: str,
+                         user_func_names: set = None, func_source_map: dict = None):
+    user_func_names = user_func_names or set()
+    func_source_map = func_source_map or {}
     lines = code.splitlines()
     nodes = []
     edges = []
@@ -102,8 +114,19 @@ def build_function_graph(func_node, code: str, func_id: str):
 
             else:
                 raw = ast.get_source_segment(code, stmt) or header
-                nodes.append({"id": nid, "type": "action", "label": "", "raw_code": raw,
-                               "line_start": line_s, "line_end": line_e})
+                called = find_user_func_calls(stmt, user_func_names - {func_node.name})
+                if called:
+                    called_name = next(iter(called))
+                    nodes.append({
+                        "id": nid, "type": "function_call", "label": "",
+                        "raw_code": raw, "called_function": called_name,
+                        "called_function_code": func_source_map.get(called_name, ""),
+                        "call_description": "", "call_output": "",
+                        "line_start": line_s, "line_end": line_e,
+                    })
+                else:
+                    nodes.append({"id": nid, "type": "action", "label": "", "raw_code": raw,
+                                   "line_start": line_s, "line_end": line_e})
                 for src, lbl in pending:
                     add_edge(src, nid, lbl)
                 pending = [(nid, "")]
@@ -114,19 +137,35 @@ def build_function_graph(func_node, code: str, func_id: str):
 
 def build_all_functions(code: str) -> list:
     tree = ast.parse(code)
-    functions = []
 
+    user_func_names = set()
+    func_source_map = {}
+    for node in ast.iter_child_nodes(tree):
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            user_func_names.add(node.name)
+            func_source_map[node.name] = ast.get_source_segment(code, node) or ""
+
+    functions = []
     for func_idx, node in enumerate(ast.iter_child_nodes(tree)):
         if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
             continue
 
         func_id = f"func_{func_idx}"
-        nodes, edges = build_function_graph(node, code, func_id)
+        nodes, edges = build_function_graph(node, code, func_id, user_func_names, func_source_map)
 
         label_map = label_function(node.name, nodes)
         for n in nodes:
-            if n["type"] != "start":
-                n["label"] = label_map.get(n["id"], n["raw_code"])
+            if n["type"] == "start":
+                continue
+            lbl = label_map.get(n["id"])
+            if lbl:
+                n["label"] = lbl.get("label", n["raw_code"])
+                if n["type"] == "function_call":
+                    n["call_description"] = lbl.get("call_description", "")
+                    n["call_output"] = lbl.get("call_output", "")
+            else:
+                n["label"] = n["raw_code"]
+            n.pop("called_function_code", None)
 
         functions.append({
             "id": func_id,
