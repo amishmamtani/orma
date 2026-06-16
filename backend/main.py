@@ -1,10 +1,13 @@
 import ast
 import sys
 import os
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 
 load_dotenv()
 
@@ -12,7 +15,18 @@ sys.path.insert(0, os.path.dirname(__file__))
 from chains.labeling_graph import label_function
 from chains.prompt_graph import generate_prompt
 
+limiter = Limiter(key_func=get_remote_address)
 app = FastAPI()
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+SECRET_TOKEN = os.getenv("SECRET_TOKEN")
+
+def verify_token(request: Request):
+    if not SECRET_TOKEN:
+        return
+    if request.headers.get("X-Secret-Token") != SECRET_TOKEN:
+        raise HTTPException(status_code=401, detail="Unauthorized.")
 
 app.add_middleware(
     CORSMiddleware,
@@ -186,15 +200,20 @@ class GeneratePromptRequest(BaseModel):
 
 
 @app.post("/generate-prompt")
-def generate_prompt_endpoint(request: GeneratePromptRequest):
-    prompt = generate_prompt(
-        request.function_name,
-        request.original_nodes,
-        request.original_edges,
-        request.edited_nodes,
-        request.edited_edges,
-    )
-    return {"prompt": prompt}
+@limiter.limit("10/minute")
+def generate_prompt_endpoint(request: Request, body: GeneratePromptRequest):
+    verify_token(request)
+    try:
+        prompt = generate_prompt(
+            body.function_name,
+            body.original_nodes,
+            body.original_edges,
+            body.edited_nodes,
+            body.edited_edges,
+        )
+        return {"prompt": prompt}
+    except Exception:
+        raise HTTPException(status_code=500, detail="Something went wrong generating the prompt. Try again.")
 
 
 @app.get("/")
@@ -203,11 +222,13 @@ def root():
 
 
 @app.post("/parse")
-def parse_code(request: ParseRequest):
-    if not request.code.strip():
+@limiter.limit("10/minute")
+def parse_code(request: Request, body: ParseRequest):
+    verify_token(request)
+    if not body.code.strip():
         raise HTTPException(status_code=400, detail="No code provided.")
     try:
-        functions = build_all_functions(request.code)
+        functions = build_all_functions(body.code)
     except SyntaxError as e:
         raise HTTPException(status_code=422, detail=f"Invalid Python: {e.msg} (line {e.lineno})")
     return {"functions": functions}

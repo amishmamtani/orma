@@ -201,6 +201,7 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
           {error}
         </div>
       )}
+
     </div>
   )
 }

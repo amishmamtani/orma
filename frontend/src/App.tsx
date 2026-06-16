@@ -46,7 +46,10 @@ function App() {
     try {
       const res = await fetch('http://localhost:8000/parse', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(import.meta.env.VITE_SECRET_TOKEN ? { 'X-Secret-Token': import.meta.env.VITE_SECRET_TOKEN } : {}),
+        },
         body: JSON.stringify({ code }),
       })
       if (!res.ok) {
@@ -55,12 +58,16 @@ function App() {
         return
       }
       const data = await res.json()
+      if (data.functions.length === 0) {
+        setError('No functions or statements found in this code.')
+        return
+      }
       setFunctions(data.functions)
       if (data.functions.length > 0) setActiveFuncId(data.functions[0].id)
       setCanvasHasChanges(false)
       localStorage.setItem('orma_parse_cache', JSON.stringify({ code, filename, functions: data.functions }))
     } catch {
-      setError('Could not reach the backend.')
+      setError("Couldn't reach the server. Make sure the backend is running.")
     } finally {
       setLoading(false)
     }
@@ -98,7 +105,10 @@ function App() {
     try {
       const res = await fetch('http://localhost:8000/generate-prompt', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(import.meta.env.VITE_SECRET_TOKEN ? { 'X-Secret-Token': import.meta.env.VITE_SECRET_TOKEN } : {}),
+        },
         body: JSON.stringify({
           function_name: activeFunc.name,
           original_nodes: activeFunc.nodes,
@@ -107,10 +117,15 @@ function App() {
           edited_edges: editedEdges,
         }),
       })
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}))
+        setPrompt({ text: data.detail || 'Something went wrong generating the prompt. Try again.', visible: true, generating: false })
+        return
+      }
       const data = await res.json()
       setPrompt({ text: data.prompt, visible: true, generating: false })
     } catch {
-      setPrompt({ text: 'Could not reach the backend.', visible: true, generating: false })
+      setPrompt({ text: "Couldn't reach the server. Make sure the backend is running.", visible: true, generating: false })
     }
   }
 
@@ -135,6 +150,29 @@ function App() {
             onNodeSelect={setHighlightRange}
             onDirtyChange={setCanvasHasChanges}
           />
+        </div>
+      )}
+
+      {/* Canvas placeholder — shown when no diagram is loaded */}
+      {functions.length === 0 && (
+        <div
+          className="absolute flex items-center justify-center"
+          style={{ left: 'calc(33vw + 32px)', top: 0, right: 0, bottom: 0 }}
+        >
+          {loading ? (
+            <div className="flex flex-col items-center gap-3">
+              <div className="flex gap-1.5">
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#444', animationDelay: '0ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#444', animationDelay: '200ms' }} />
+                <span className="w-1.5 h-1.5 rounded-full animate-pulse" style={{ background: '#444', animationDelay: '400ms' }} />
+              </div>
+              <p style={{ color: '#444', fontSize: 12 }}>Untangling the spaghetti…</p>
+            </div>
+          ) : (
+            <p style={{ color: '#3a3a3a', fontSize: 13 }}>
+              Paste your Python code and click Run to see the diagram
+            </p>
+          )}
         </div>
       )}
 

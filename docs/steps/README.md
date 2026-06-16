@@ -32,6 +32,7 @@ This is the single source of truth for build progress. Claude reads this at the 
 | 8 | Frontend design + implementation | ✅ | [step-08.md](step-08.md) |
 | 8.5 | Swap Gemini → Claude | ✅ | [step-08.5.md](step-08.5.md) |
 | 9 | Deploy | ⏳ | [step-09.md](step-09.md) |
+| 10 | User-provided API key | ⏳ | [step-10.md](step-10.md) |
 
 ---
 
