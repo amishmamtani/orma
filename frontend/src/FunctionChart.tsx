@@ -18,6 +18,9 @@ export interface ParseNode {
   raw_code: string
   line_start: number
   line_end: number
+  called_function?: string
+  call_description?: string
+  call_output?: string
 }
 
 export interface ParseEdge {
