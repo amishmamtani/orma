@@ -12,6 +12,8 @@ interface PromptState {
   generating: boolean
 }
 
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000').replace(/\/$/, '')
+
 function App() {
   const [code, setCode] = useState('')
   const [filename, setFilename] = useState('main.py')
@@ -44,7 +46,7 @@ function App() {
     setActiveFuncId(null)
     setPrompt({ text: '', visible: false, generating: false })
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/parse`, {
+      const res = await fetch(`${API_BASE}/parse`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -103,7 +105,7 @@ function App() {
       }))
 
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000'}/generate-prompt`, {
+      const res = await fetch(`${API_BASE}/generate-prompt`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
