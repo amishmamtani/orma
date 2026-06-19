@@ -98,36 +98,38 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
         {code ? (
           <>
             {/* Syntax highlighted display — scrollable, driven by textarea scroll */}
-            <div ref={highlighterRef} className="absolute inset-0 overflow-y-auto no-scrollbar" style={{ zIndex: 0 }}>
-              <div style={{ position: 'relative' }}>
-                <SyntaxHighlighter
-                  language="python"
-                  style={atomOneDark}
-                  wrapLongLines={true}
-                  customStyle={{
-                    background: 'transparent',
-                    margin: 0,
-                    padding: '16px',
-                    fontSize: 12,
-                    lineHeight: 1.7,
-                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                  }}
-                >
-                  {code}
-                </SyntaxHighlighter>
-                {highlightRange && (
-                  <div style={{
-                    position: 'absolute',
-                    top: 16 + (highlightRange.lineStart - 1) * (12 * 1.7),
-                    left: 0,
-                    right: 0,
-                    height: (highlightRange.lineEnd - highlightRange.lineStart + 1) * (12 * 1.7),
-                    backgroundColor: `${highlightRange.color}26`,
-                    borderLeft: `3px solid ${highlightRange.color}`,
-                    pointerEvents: 'none',
-                  }} />
-                )}
-              </div>
+            <div ref={highlighterRef} className="absolute inset-0 overflow-y-auto no-scrollbar" style={{ zIndex: 0, overflowX: 'hidden' }}>
+              <SyntaxHighlighter
+                language="python"
+                style={atomOneDark}
+                wrapLines={true}
+                lineProps={(lineNumber: number) => {
+                  const isHighlighted = !!highlightRange &&
+                    lineNumber >= highlightRange.lineStart &&
+                    lineNumber <= highlightRange.lineEnd
+                  return {
+                    style: {
+                      display: 'block',
+                      padding: '0 16px',
+                      ...(isHighlighted && {
+                        backgroundColor: `${highlightRange!.color}26`,
+                        borderLeft: `3px solid ${highlightRange!.color}`,
+                        paddingLeft: '13px',
+                      }),
+                    },
+                  }
+                }}
+                customStyle={{
+                  background: 'transparent',
+                  margin: 0,
+                  padding: '16px 0',
+                  fontSize: 12,
+                  lineHeight: 1.7,
+                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                }}
+              >
+                {code}
+              </SyntaxHighlighter>
             </div>
             {/* Transparent textarea — captures input and scroll, no visual */}
             <textarea

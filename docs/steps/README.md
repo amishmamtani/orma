@@ -28,10 +28,10 @@ This is the single source of truth for build progress. Claude reads this at the 
 | 4 | Per-function flowcharts (backend) | ✅ | [step-04.md](step-04.md) |
 | 5 | Multiple editable flowcharts (frontend) | ✅ | [step-05.md](step-05.md) |
 | 6 | Prompt generation from graph state | ✅ | [step-06.md](step-06.md) |
-| 7 | Loading, errors, empty states | ⏳ | [step-07.md](step-07.md) |
+| 7 | Loading, errors, empty states | ✅ | [step-07.md](step-07.md) |
 | 8 | Frontend design + implementation | ✅ | [step-08.md](step-08.md) |
 | 8.5 | Swap Gemini → Claude | ✅ | [step-08.5.md](step-08.5.md) |
-| 9 | Deploy | ⏳ | [step-09.md](step-09.md) |
+| 9 | Deploy | ✅ | [step-09.md](step-09.md) |
 | 10 | User-provided API key | ⏳ | [step-10.md](step-10.md) |
 
 ---
