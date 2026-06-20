@@ -21,6 +21,7 @@ interface Props {
 
 export function CodePanel({ code, filename, loading, error, highlightRange, onChange, onRun }: Props) {
   const [dragging, setDragging] = useState(false)
+  const [overlayPos, setOverlayPos] = useState<{ top: number; height: number } | null>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const highlighterRef = useRef<HTMLDivElement>(null)
 
@@ -30,13 +31,32 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
     }
   }
 
-  // Auto-scroll to highlighted lines when a node is selected
+  // Measure actual DOM positions for the highlight overlay — works regardless of line wrapping
   useEffect(() => {
-    if (!highlightRange || !highlighterRef.current) return
-    const lineH = 12 * 1.7
-    const targetScroll = Math.max(0, (highlightRange.lineStart - 1) * lineH - 60)
-    highlighterRef.current.scrollTop = targetScroll
-    if (textareaRef.current) textareaRef.current.scrollTop = targetScroll
+    if (!highlightRange || !highlighterRef.current) {
+      setOverlayPos(null)
+      return
+    }
+    const container = highlighterRef.current
+    // Each line is a direct <span> child of <code> when wrapLines={true}
+    const lineSpans = Array.from(container.querySelectorAll('code > span')) as HTMLElement[]
+    const startEl = lineSpans[highlightRange.lineStart - 1]
+    const endEl   = lineSpans[highlightRange.lineEnd - 1]
+    if (!startEl || !endEl) { setOverlayPos(null); return }
+
+    const containerRect = container.getBoundingClientRect()
+    const startRect     = startEl.getBoundingClientRect()
+    const endRect       = endEl.getBoundingClientRect()
+
+    const top    = startRect.top - containerRect.top + container.scrollTop
+    const height = endRect.bottom - startRect.top
+
+    setOverlayPos({ top, height })
+
+    // Scroll so highlighted lines are visible
+    const newScroll = Math.max(0, top - 60)
+    container.scrollTop = newScroll
+    if (textareaRef.current) textareaRef.current.scrollTop = newScroll
   }, [highlightRange])
 
   function handleDrop(e: React.DragEvent) {
@@ -98,38 +118,38 @@ export function CodePanel({ code, filename, loading, error, highlightRange, onCh
         {code ? (
           <>
             {/* Syntax highlighted display — scrollable, driven by textarea scroll */}
-            <div ref={highlighterRef} className="absolute inset-0 overflow-y-auto no-scrollbar" style={{ zIndex: 0, overflowX: 'hidden' }}>
-              <SyntaxHighlighter
-                language="python"
-                style={atomOneDark}
-                wrapLines={true}
-                lineProps={(lineNumber: number) => {
-                  const isHighlighted = !!highlightRange &&
-                    lineNumber >= highlightRange.lineStart &&
-                    lineNumber <= highlightRange.lineEnd
-                  return {
-                    style: {
-                      display: 'block',
-                      padding: '0 16px',
-                      ...(isHighlighted && {
-                        backgroundColor: `${highlightRange!.color}26`,
-                        borderLeft: `3px solid ${highlightRange!.color}`,
-                        paddingLeft: '13px',
-                      }),
-                    },
-                  }
-                }}
-                customStyle={{
-                  background: 'transparent',
-                  margin: 0,
-                  padding: '16px 0',
-                  fontSize: 12,
-                  lineHeight: 1.7,
-                  fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
-                }}
-              >
-                {code}
-              </SyntaxHighlighter>
+            <div ref={highlighterRef} className="absolute inset-0 overflow-y-auto no-scrollbar" style={{ zIndex: 0 }}>
+              <div style={{ position: 'relative' }}>
+                <SyntaxHighlighter
+                  language="python"
+                  style={atomOneDark}
+                  wrapLines={true}
+                  wrapLongLines={true}
+                  lineProps={{ style: { display: 'block' } } as React.HTMLProps<HTMLElement>}
+                  customStyle={{
+                    background: 'transparent',
+                    margin: 0,
+                    padding: '16px',
+                    fontSize: 12,
+                    lineHeight: 1.7,
+                    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+                  }}
+                >
+                  {code}
+                </SyntaxHighlighter>
+                {overlayPos && highlightRange && (
+                  <div style={{
+                    position: 'absolute',
+                    top: overlayPos.top,
+                    left: 0,
+                    right: 0,
+                    height: overlayPos.height,
+                    backgroundColor: `${highlightRange.color}26`,
+                    borderLeft: `3px solid ${highlightRange.color}`,
+                    pointerEvents: 'none',
+                  }} />
+                )}
+              </div>
             </div>
             {/* Transparent textarea — captures input and scroll, no visual */}
             <textarea
